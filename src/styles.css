@@ -1,0 +1,196 @@
+/* Lantern Focus */
+.workspace-leaf-content[data-type="lantern-focus-view"] .view-content.lf-host { padding: 0; overflow: auto; display: flex; flex-direction: column; background: #121010; }
+.view-content.lf-host:has(.lf[data-theme]) { background: transparent; }
+.lf-host > .lf { flex: 1 0 auto; }
+.lf {
+  --lf-ink: #f3ebe0; --lf-soft: #cbbfae; --lf-dim: #93877a; --lf-line: rgba(243, 235, 224, .1);
+  /* colour way (Amber by default): accent, its rgb, the glow while focusing, and the break colour */
+  --lf-acc-rgb: 255, 185, 92; --lf-glow-a: 255, 170, 70; --lf-glow-b: 255, 120, 40; --lf-brk-rgb: 127, 214, 194; --lf-brk-glow: 110, 210, 190; --lf-bg: #121010;
+  --lf-amber: rgb(var(--lf-acc-rgb)); --lf-amber-ink: color-mix(in srgb, rgb(var(--lf-acc-rgb)) 55%, #fff); --lf-amber-bg: rgba(var(--lf-acc-rgb), .14);
+  --lf-teal: rgb(var(--lf-brk-rgb)); --lf-glass: rgba(255, 255, 255, .045);
+  position: relative; min-height: 100%; overflow: hidden; isolation: isolate;
+  display: flex; flex-direction: column; gap: 14px; padding: 16px 14px 20px;
+  background: var(--lf-bg); color: var(--lf-ink);
+  font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.lf *, .lf *::before, .lf *::after { box-sizing: border-box; }
+.lf .is-hidden { display: none !important; }
+
+/* the lantern's glow: warm while you focus, cool on a break, low when idle */
+.lf-glow {
+  position: absolute; z-index: -1; left: 50%; top: 150px; width: 460px; height: 460px; margin-left: -230px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--lf-glow-a), .34), rgba(var(--lf-glow-b), .08) 45%, transparent 70%);
+  opacity: .45; transition: opacity 1.5s ease, background 1.5s ease; pointer-events: none;
+}
+.lf[data-phase="focus"] .lf-glow { opacity: 1; animation: lf-flicker 7s ease-in-out infinite; }
+.lf[data-phase="focus"].is-paused .lf-glow { opacity: .5; animation: none; }
+.lf[data-phase="break"] .lf-glow { opacity: .9; background: radial-gradient(circle, rgba(var(--lf-brk-glow), .28), rgba(var(--lf-brk-glow), .06) 45%, transparent 70%); }
+@keyframes lf-flicker { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.03); } 60% { transform: scale(.985); } }
+
+.lf-head { display: flex; justify-content: flex-end; align-items: baseline; padding: 0 2px; }
+.lf-head:not(:has(.lf-today:not(:empty))) { display: none; }
+.lf-title { font-size: 16px; font-weight: 600; }
+.lf-head-r { display: flex; align-items: center; gap: 12px; }
+.lf-today { font-size: 12px; color: var(--lf-soft); }
+
+.lf input.lf-input {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 36px; margin: 0; padding: 0 12px;
+  border: 1px solid var(--lf-line); border-radius: 10px; background: rgba(255, 255, 255, .05); color: var(--lf-ink); font: inherit; box-shadow: none;
+}
+.lf input.lf-input:focus { border-color: var(--lf-amber); outline: none; box-shadow: none; }
+.lf input.lf-input::placeholder { color: var(--lf-dim); }
+.lf-task input.lf-input { height: 42px; font-size: 15px; text-align: center; }
+.lf-task { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.lf button.lf-notechip { -webkit-appearance: none; appearance: none; display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 26px; margin: 0; padding: 0 12px; border: 0; border-radius: 13px; background: rgba(255, 255, 255, .06); color: var(--lf-soft); font: inherit; font-size: 12px; cursor: pointer; box-shadow: none; }
+.lf button.lf-notechip:hover { background: var(--lf-amber-bg); color: var(--lf-amber-ink); }
+.lf-notechip span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lf-notechip-ico { display: inline-flex; } .lf-notechip-ico svg { width: 13px; height: 13px; }
+.lf-task-shown { text-align: center; font-size: 16px; font-weight: 600; color: var(--lf-amber-ink); overflow-wrap: anywhere; padding: 0 8px; }
+
+/* the ring */
+.lf-ring-wrap { position: relative; width: min(240px, 80%); aspect-ratio: 1; align-self: center; }
+.lf-ring { width: 100%; height: 100%; transform: rotate(-90deg); }
+.lf-ring-track { fill: none; stroke: rgba(255, 255, 255, .07); stroke-width: 6; }
+.lf-ring-arc { fill: none; stroke: var(--lf-amber); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke .8s ease; filter: drop-shadow(0 0 6px rgba(var(--lf-acc-rgb), .55)); }
+.lf[data-phase="break"] .lf-ring-arc { stroke: var(--lf-teal); filter: drop-shadow(0 0 6px rgba(var(--lf-brk-rgb), .5)); }
+.lf-ring-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.lf-phase { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--lf-soft); }
+.lf-time { font-size: 46px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1.1; }
+.lf-round { font-size: 11.5px; color: var(--lf-dim); }
+
+/* buttons and chips */
+.lf button.lf-btn, .lf button.lf-chip, .lf button.lf-x {
+  -webkit-appearance: none; appearance: none; display: inline-flex; align-items: center; justify-content: center;
+  margin: 0; padding: 0; border: 0; box-shadow: none; font: inherit; color: inherit; cursor: pointer; background: none; height: auto; min-height: 0;
+}
+.lf button:focus-visible { outline: 2px solid var(--lf-amber); outline-offset: 2px; }
+.lf button[disabled] { opacity: .35; cursor: default; }
+.lf-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.lf button.lf-chip { height: 30px; padding: 0 14px; border-radius: 15px; background: rgba(255, 255, 255, .06); color: var(--lf-soft); font-size: 12.5px; }
+.lf button.lf-chip:hover { background: rgba(255, 255, 255, .1); color: var(--lf-ink); }
+.lf button.lf-chip.is-on { background: var(--lf-amber-bg); color: var(--lf-amber-ink); box-shadow: inset 0 0 0 1px rgba(var(--lf-acc-rgb), .3); }
+.lf-chips-sm { justify-content: flex-start; }
+.lf .lf-chips-sm button.lf-chip { height: 28px; padding: 0 12px; }
+.lf-ctl { display: flex; align-items: center; justify-content: center; gap: 22px; }
+.lf .lf-btn.lf-main { width: 64px; height: 64px; border-radius: 50%; background: var(--lf-amber-bg); color: var(--lf-amber); box-shadow: inset 0 0 0 1px rgba(var(--lf-acc-rgb), .22), 0 4px 18px rgba(0, 0, 0, .35); }
+.lf .lf-btn.lf-main:hover { background: rgba(var(--lf-acc-rgb), .24); }
+.lf .lf-btn.lf-main svg { width: 26px; height: 26px; }
+.lf .lf-btn.lf-side { width: 42px; height: 42px; border-radius: 50%; background: rgba(255, 255, 255, .06); color: var(--lf-soft); font-size: 13px; font-weight: 600; }
+.lf .lf-btn.lf-side:hover:not([disabled]) { background: rgba(255, 255, 255, .11); color: var(--lf-ink); }
+
+/* cards */
+.lf-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--lf-glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.lf-label { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--lf-dim); }
+.lf-hint { font-size: 12px; color: var(--lf-dim); }
+.lf-vol { display: flex; align-items: center; gap: 8px; color: var(--lf-soft); }
+.lf-vol-ico { display: inline-flex; width: 34px; justify-content: center; }
+.lf-slabel { width: 34px; flex: none; font-size: 11.5px; color: var(--lf-dim); }
+.lf-sval { width: 52px; flex: none; text-align: right; font-size: 11.5px; color: var(--lf-soft); font-variant-numeric: tabular-nums; }
+.lf-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--lf-soft); cursor: pointer; }
+.lf-check input { accent-color: var(--lf-amber); margin: 0; }
+.lf-thoughts li.is-saved span:first-child { color: var(--lf-soft); }
+.lf-saved { display: inline-flex; color: #8fd19e; } .lf-saved svg { width: 14px; height: 14px; }
+.lf input.lf-range {
+  --lf-pct: 45%; -webkit-appearance: none; appearance: none; flex: 1; height: 4px; margin: 8px 0; padding: 0; border: 0; border-radius: 2px; cursor: pointer;
+  background: linear-gradient(to right, var(--lf-amber) var(--lf-pct), rgba(255, 255, 255, .15) var(--lf-pct));
+}
+.lf input.lf-range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--lf-amber); border: 0; }
+.lf-thoughts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.lf-thoughts li { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 8px; margin: 0; }
+.lf-thoughts li::marker { content: none; }
+.lf-thoughts li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lf-thoughts li:hover { background: rgba(255, 255, 255, .05); }
+.lf button.lf-x { width: 22px; height: 22px; border-radius: 50%; color: var(--lf-dim); opacity: 0; }
+.lf-thoughts li:hover .lf-x { opacity: 1; }
+.lf button.lf-x svg { width: 14px; height: 14px; }
+
+.lf-done { padding: 12px; border-radius: 14px; background: var(--lf-amber-bg); color: var(--lf-amber-ink); display: flex; flex-direction: column; gap: 2px; }
+.lf-done-title { font-weight: 600; color: var(--lf-ink); }
+
+.lf-modal-input { width: 100%; }
+.lf-status { cursor: pointer; font-variant-numeric: tabular-nums; }
+.lf-status.lf-hidden { display: none; }
+
+/* ---------- calm screen ---------- */
+body.lantern-calm .workspace-ribbon,
+body.lantern-calm .workspace-tab-header-container,
+body.lantern-calm .view-header,
+body.lantern-calm .status-bar,
+body.lantern-calm .titlebar,
+body.lantern-calm.lantern-calm-sides .mod-left-split {
+  opacity: .12; transition: opacity .8s ease;
+}
+body.lantern-calm .workspace-ribbon:hover,
+body.lantern-calm .workspace-tab-header-container:hover,
+body.lantern-calm .view-header:hover,
+body.lantern-calm .status-bar:hover,
+body.lantern-calm .titlebar:hover,
+body.lantern-calm.lantern-calm-sides .mod-left-split:hover { opacity: 1; transition: opacity .25s ease; }
+/* themes that paint glows or pictures behind the app (Static Aurora, Konban, Tokyo Rain, Field Kit) quieten down */
+body.lantern-calm::before, body.lantern-calm::after { opacity: .12 !important; transition: opacity 1.2s ease; }
+.workspace-ribbon, .workspace-tab-header-container, .view-header, .status-bar, .mod-left-split { transition: opacity .8s ease; }
+@media (prefers-reduced-motion: reduce) { .lf[data-phase="focus"] .lf-glow { animation: none; } }
+
+/* ---------- colour ways ---------- */
+.lf[data-theme="sea"]    { --lf-acc-rgb: 108, 196, 236; --lf-glow-a: 80, 170, 230;  --lf-glow-b: 40, 110, 200;  --lf-brk-rgb: 150, 220, 170; --lf-brk-glow: 120, 210, 160; --lf-bg: #0d1116; }
+.lf[data-theme="forest"] { --lf-acc-rgb: 140, 206, 120; --lf-glow-a: 110, 190, 110; --lf-glow-b: 50, 130, 80;   --lf-brk-rgb: 230, 200, 120; --lf-brk-glow: 220, 190, 110; --lf-bg: #0e120f; }
+.lf[data-theme="dusk"]   { --lf-acc-rgb: 186, 150, 255; --lf-glow-a: 160, 110, 240; --lf-glow-b: 110, 60, 200;  --lf-brk-rgb: 255, 170, 200; --lf-brk-glow: 240, 150, 190; --lf-bg: #110f17; }
+.lf[data-theme="mono"]   { --lf-acc-rgb: 220, 220, 216; --lf-glow-a: 200, 200, 200; --lf-glow-b: 120, 120, 120; --lf-brk-rgb: 160, 160, 156; --lf-brk-glow: 150, 150, 150; --lf-bg: #111111; }
+.lf[data-theme="mono"] .lf-glow { opacity: .25 !important; animation: none !important; }
+.lf-host:has(.lf[data-theme="sea"]) { background: #0d1116 !important; }
+.lf-host:has(.lf[data-theme="forest"]) { background: #0e120f !important; }
+.lf-host:has(.lf[data-theme="dusk"]) { background: #110f17 !important; }
+.lf-host:has(.lf[data-theme="mono"]) { background: #111111 !important; }
+.lf-themes { display: flex; gap: 8px; }
+.lf button.lf-dot { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; border: 0; border-radius: 50%; cursor: pointer; background: var(--dot); box-shadow: 0 0 0 2px transparent; opacity: .55; }
+.lf button.lf-dot:hover { opacity: 1; }
+.lf button.lf-dot.is-on { opacity: 1; box-shadow: 0 0 0 2px var(--lf-bg), 0 0 0 3.5px var(--dot); }
+
+/* ---------- now playing ---------- */
+.lf-np-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.lf-np-art { flex: none; width: 56px; height: 56px; border-radius: 10px; overflow: hidden; display: grid; place-items: center; background: rgba(var(--lf-acc-rgb), .12); color: var(--lf-amber); box-shadow: 0 4px 14px rgba(0, 0, 0, .35); }
+.lf-np-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lf-np-art svg { width: 24px; height: 24px; }
+.lf-np-info { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.lf-np-app { font-size: 11px; color: var(--lf-amber-ink); letter-spacing: .3px; }
+.lf-np-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-np-sub { font-size: 12px; color: var(--lf-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lf-np-ctl { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.lf .lf-btn.lf-np-btn { width: 34px; height: 34px; border-radius: 50%; background: rgba(255, 255, 255, .06); color: var(--lf-soft); }
+.lf .lf-btn.lf-np-btn:hover { background: rgba(255, 255, 255, .11); color: var(--lf-ink); }
+.lf .lf-btn.lf-np-btn svg { width: 16px; height: 16px; }
+
+/* ---------- blend with the sidebar (default): your theme's own colours, a soft dimmed timer ---------- */
+.workspace-leaf-content[data-type="lantern-focus-view"] .view-content.lf-host:has(.lf-blend) { background: transparent !important; }
+.lf.lf-blend {
+  --lf-ink: var(--text-normal); --lf-soft: var(--text-muted); --lf-dim: var(--text-faint);
+  --lf-line: var(--background-modifier-border); --lf-glass: var(--background-modifier-hover);
+  --lf-amber-ink: var(--text-muted);
+  background: transparent; color: var(--text-normal);
+  font-family: var(--font-interface);
+}
+.lf.lf-blend .lf-glow { display: none; }
+.lf.lf-blend .lf-ring-track { stroke: var(--background-modifier-border); stroke-width: 4; }
+.lf.lf-blend .lf-ring-arc { stroke-width: 4; opacity: .45; filter: none !important; }
+.lf.lf-blend .lf-time { color: var(--text-muted); font-weight: 200; opacity: .8; }
+.lf.lf-blend .lf-phase, .lf.lf-blend .lf-round { color: var(--text-faint); }
+.lf.lf-blend .lf-task-shown { color: var(--text-muted); font-weight: 500; }
+.lf.lf-blend .lf-card { background: transparent; border: 0; padding: 4px 2px; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.lf.lf-blend input.lf-input { background: var(--background-modifier-form-field); border-color: var(--background-modifier-border); color: var(--text-normal); }
+.lf.lf-blend input.lf-input::placeholder { color: var(--text-faint); }
+.lf.lf-blend button.lf-chip, .lf.lf-blend button.lf-notechip { background: transparent; border: 1px solid var(--background-modifier-border); color: var(--text-muted); }
+.lf.lf-blend button.lf-chip.is-on { background: var(--background-modifier-hover); color: var(--text-normal); box-shadow: none; border-color: var(--background-modifier-border-hover); }
+.lf.lf-blend .lf-btn.lf-main { background: var(--background-modifier-hover); color: var(--text-muted); box-shadow: none; }
+.lf.lf-blend .lf-btn.lf-main:hover { background: var(--background-modifier-active-hover); color: var(--text-normal); }
+.lf.lf-blend .lf-btn.lf-side, .lf.lf-blend .lf-btn.lf-np-btn { background: transparent; color: var(--text-faint); }
+.lf.lf-blend .lf-btn.lf-side:hover:not([disabled]), .lf.lf-blend .lf-btn.lf-np-btn:hover { background: var(--background-modifier-hover); color: var(--text-normal); }
+.lf.lf-blend .lf-np-art { background: var(--background-modifier-hover); color: var(--text-faint); box-shadow: none; }
+.lf.lf-blend .lf-np-app { color: var(--text-faint); }
+.lf.lf-blend .lf-done { background: var(--background-modifier-hover); color: var(--text-muted); }
+.lf.lf-blend .lf-dot { opacity: .35; }
+
+/* one continuous background, top to bottom: the panel itself, its container and the leaf are all see-through */
+.workspace-leaf-content[data-type="lantern-focus-view"]:has(.lf-blend),
+.workspace-leaf-content[data-type="lantern-focus-view"]:has(.lf-blend) .view-content { background: transparent !important; }
+.lf-host > .lf.lf-blend { min-height: 100%; }
+.lf.lf-blend .lf-np-title { color: var(--text-muted); font-weight: 500; }

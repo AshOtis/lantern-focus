@@ -1,0 +1,24 @@
+name: Release
+# When you publish a GitHub release, build the plugin and attach main.js, manifest.json and styles.css to it.
+on:
+  release:
+    types: [published]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag matches manifest version
+        run: |
+          v=$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])")
+          if [ "${{ github.event.release.tag_name }}" != "$v" ]; then
+            echo "Tag ${{ github.event.release.tag_name }} does not match manifest version $v"; exit 1
+          fi
+      - name: Build
+        run: python3 build.py
+      - name: Attach files to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/main.js dist/manifest.json dist/styles.css --clobber

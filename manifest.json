@@ -1,0 +1,11 @@
+{
+  "id": "lantern-focus",
+  "name": "Lantern Focus",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Focus sessions for wandering minds: one task, a timer with breaks, a place to park stray thoughts, a calm screen that fades everything but your note, and what your music players or Spotify are playing.",
+  "author": "AshOtis",
+  "authorUrl": "https://github.com/AshOtis",
+  "fundingUrl": "https://buymeacoffee.com/ashotis",
+  "isDesktopOnly": false
+}
