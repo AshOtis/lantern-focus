@@ -194,3 +194,7 @@ body.lantern-calm::before, body.lantern-calm::after { opacity: .12 !important; t
 .workspace-leaf-content[data-type="lantern-focus-view"]:has(.lf-blend) .view-content { background: transparent !important; }
 .lf-host > .lf.lf-blend { min-height: 100%; }
 .lf.lf-blend .lf-np-title { color: var(--text-muted); font-weight: 500; }
+
+/* before a session: the note it will be about */
+.lf-task-shown.is-next { opacity: .7; font-size: .95em; }
+.lf-task-shown.is-next::before { content: 'Focusing on: '; opacity: .7; }

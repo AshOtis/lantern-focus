@@ -125,15 +125,17 @@ class LanternView extends ItemView {
     const C = 2 * Math.PI * 88;
     this.arc.style.strokeDashoffset = String(C * (1 - (s ? left / total : 1)));
 
-    this.taskInput.parentElement.toggleClass('is-hidden', !!s);
+    this.taskInput.parentElement.toggleClass('is-hidden', true);   // no task box: a session is about the note you're in
     // the note you're on: offered as the task, and used if you start without typing one
     const note = p.currentNote();
     this.taskInput.placeholder = note ? `What will you focus on? (${note.basename})` : 'What will you focus on?';
     const showChip = !!(note && this.taskInput.value.trim() !== note.basename);
     this.noteChip.toggleClass('is-hidden', !showChip);
     if (showChip && this.noteChip.dataset.n !== note.path) { this.noteChip.dataset.n = note.path; this.noteChip.empty(); setIcon(this.noteChip.createSpan({ cls: 'lf-notechip-ico' }), 'file-text'); this.noteChip.createSpan({ text: 'Use this note: ' + note.basename }); }
-    this.taskShown.setText(s ? (s.task || 'Focus') : '');
-    this.taskShown.toggleClass('is-hidden', !s);
+    // what the session is about: the note you're working in (or were last in), shown before you start too
+    this.taskShown.setText(s ? (s.task || 'Focus') : (note ? note.basename : ''));
+    this.taskShown.toggleClass('is-hidden', !s && !note);
+    this.taskShown.toggleClass('is-next', !s);
     this.lenRow.toggleClass('is-hidden', !!s);
     for (const m in this.lenBtns) this.lenBtns[m].toggleClass('is-on', Number(m) === d.minutes);
 
@@ -162,7 +164,7 @@ class LanternView extends ItemView {
       });
     }
     this.parkNowEl.checked = !!d.parkNow;
-    this.parkHint.setText(d.parkNow ? 'Each thought goes into your daily note as soon as you press Enter.' : 'Parked thoughts go to your daily note when the session ends.');
+    this.parkHint.setText(d.parkNow ? 'Each thought goes to the top of your daily note as soon as you press Enter.' : 'Parked thoughts go to the top of your daily note when the session ends.');
     this.parkHint.toggleClass('is-hidden', th.length > 0);
 
     const mins = p.minutesToday();
@@ -251,7 +253,7 @@ class LanternFocus extends Plugin {
     this.app.workspace.onLayoutReady(() => { this.resume(); this.tick(); });
   }
 
-  onunload() { this.chime.destroy(); this.sysNow.stop(); document.body.removeClass('lantern-calm'); }
+  onunload() { this.chime.destroy(); this.sysNow.stop(); document.body.removeClass('lantern-calm', 'lantern-calm-sides', 'lantern-focus-on'); }
 
   /* ---------- now playing ---------- */
   touch(id) { this.recent = [id].concat(this.recent.filter(x => x !== id)).slice(0, 8); }
@@ -289,7 +291,7 @@ class LanternFocus extends Plugin {
 
   start() {
     const focusMin = this.d.minutes, breakMin = LF_PLANS[focusMin] || 5;
-    let task = (this.d.task || '').trim(), notePath = task ? this.d.taskNote || null : null;
+    let task = '', notePath = null;
     if (!task) { const f = this.currentNote(); if (f) { task = f.basename; notePath = f.path; } }
     this.d.session = { phase: 'focus', task, notePath, startedAt: Date.now(), endsAt: Date.now() + focusMin * 60000,
       pausedLeft: null, focusMin, breakMin, round: 1, thoughts: [] };
@@ -392,7 +394,7 @@ class LanternFocus extends Plugin {
   // write one parked thought to today's daily note now, as a task
   async saveThought(item) {
     if (item.saved) return;
-    const ok = await this.appendDaily(`- [ ] ${item.text}\n`);
+    const ok = await this.thoughtsToTop([item.text]);
     if (ok) { item.saved = true; this.save(); this.refresh(); }
     else new Notice('Lantern Focus: could not write to your daily note');
   }
@@ -413,7 +415,8 @@ class LanternFocus extends Plugin {
   /* ---------- calm screen: during focus, everything but your note fades back ---------- */
   applyCalm() {
     const s = this.d.session;
-    const on = !!(this.d.calm && s && s.phase === 'focus' && s.pausedLeft == null);
+    const running = !!(s && s.phase === 'focus' && s.pausedLeft == null), on = !!(this.d.calm && running);
+    document.body.toggleClass('lantern-focus-on', running);   // other plugins (Writers Board) can fade their own extras
     document.body.toggleClass('lantern-calm', on);
     document.body.toggleClass('lantern-calm-sides', on && this.d.calmSidebars);
   }
@@ -432,10 +435,29 @@ class LanternFocus extends Plugin {
     const what = s.notePath ? `[[${s.notePath.replace(/\.md$/i, '')}|${s.task}]]` : s.task;
     if (minutes > 0) lines.push(`- ${from}–${to} Focused ${minutes} min${what ? ' on ' + what : ''}`);
     const open = (s.thoughts || []).filter(t => !(t && t.saved)).map(t => typeof t === 'string' ? t : t.text);
-    if (!(minutes > 0) && open.length) lines.push(`- ${to} Parked thought${open.length > 1 ? 's' : ''}`);
-    for (const t of open) lines.push(`  - [ ] ${t}`);
-    if (!lines.length) return false;
-    return this.appendDaily(lines.join('\n') + '\n');
+    let ok = false;
+    if (open.length && await this.thoughtsToTop(open)) { ok = true; for (const t of s.thoughts) if (t && typeof t === 'object') t.saved = true; }
+    if (lines.length) ok = (await this.appendDaily(lines.join('\n') + '\n')) || ok;
+    return ok;
+  }
+
+  // parked thoughts always go in one list at the top of today's note, under "## Parked thoughts"
+  async thoughtsToTop(texts) {
+    const block = texts.map(t => `- [ ] ${t}`).join('\n');
+    const head = (this.d.thoughtsHeading || 'Parked thoughts').trim() || 'Parked thoughts';
+    return this.editDaily(t => lfPutTop(t, block, head));
+  }
+  async editDaily(fn) {
+    const path = this.dailyNotePath();
+    try {
+      let file = this.app.vault.getAbstractFileByPath(path);
+      if (!file) {
+        const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+        if (dir && !this.app.vault.getAbstractFileByPath(dir)) await this.app.vault.createFolder(dir);
+        await this.app.vault.create(path, fn(''));
+      } else await this.app.vault.process(file, fn);
+      return true;
+    } catch (e) { return false; }
   }
 
   async appendDaily(text) {
@@ -491,10 +513,12 @@ class LanternSettings extends PluginSettingTab {
     new Setting(el).setName('Long break').setDesc('Every few rounds, take a longer break.')
       .addDropdown(dd => dd.addOptions({ 0: 'Never', 3: 'Every 3 rounds', 4: 'Every 4 rounds', 5: 'Every 5 rounds' }).setValue(String(d.longBreakEvery)).onChange(v => { d.longBreakEvery = Number(v); p.save(); }))
       .addDropdown(dd => dd.addOptions({ 15: '15 min', 20: '20 min', 30: '30 min' }).setValue(String(d.longBreak)).onChange(v => { d.longBreak = Number(v); p.save(); }));
-    new Setting(el).setName('Log to daily note').setDesc('When a session ends, add a line such as "09:00–09:50 Focused 50 min on Chapter three", with any parked thoughts as tasks under it.')
+    new Setting(el).setName('Log to daily note').setDesc('When a session ends, add a line such as "09:00–09:50 Focused 50 min on Chapter three", about the note you were working in. Parked thoughts go as tasks in a list at the top of the note.')
       .addToggle(t => t.setValue(d.logToDaily).onChange(v => { d.logToDaily = v; p.save(); }));
     new Setting(el).setName('Write thoughts straight away').setDesc('Each parked thought goes into your daily note as a task the moment you press Enter, instead of when the session ends. You can also send a single thought with the calendar button next to it.')
       .addToggle(t => t.setValue(!!d.parkNow).onChange(v => { d.parkNow = v; p.save(); p.refresh(); }));
+    new Setting(el).setName('Thoughts heading').setDesc('Parked thoughts always go in one list under this heading at the top of today\'s daily note.')
+      .addText(t => t.setPlaceholder('Parked thoughts').setValue(d.thoughtsHeading || '').onChange(v => { d.thoughtsHeading = v.trim(); p.save(); }));
     new Setting(el).setName('Now playing').setHeading();
     new Setting(el).setName('Music follows the session').setDesc('When a focus session starts, press play on the player shown in Now playing.')
       .addToggle(t => t.setValue(d.musicFollows).onChange(v => { d.musicFollows = v; p.save(); this.display(); }));
@@ -508,4 +532,31 @@ class LanternSettings extends PluginSettingTab {
         : 'Windows only for now.')
       .addToggle(t => t.setValue(!!d.systemNow).setDisabled(ampDoes || !AMSystemNow.supported()).onChange(v => p.setSystemNow(v)));
   }
+}
+
+// Put task lines at the end of the list under `## <head>`, making that section the first thing in the note
+// (after any properties and a top # title) when it isn't there yet. Text below the list is never moved.
+function lfPutTop(text, block, head) {
+  const nl = /\r\n/.test(text) ? '\r\n' : '\n';
+  const lines = String(text || '').split(/\r?\n/);
+  const esc = head.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const hi = lines.findIndex(l => new RegExp('^#{1,6}\\s+' + esc + '\\s*$', 'i').test(l));
+  const add = block.split('\n');
+  if (hi >= 0) {
+    let j = hi + 1;
+    while (j < lines.length && lines[j].trim() === '') j++;
+    if (j < lines.length && /^\s*[-*+]\s/.test(lines[j])) { while (j < lines.length && /^(\s*[-*+]\s|\s+\S)/.test(lines[j])) j++; }
+    else j = hi + 1;
+    lines.splice(j, 0, ...add);
+    return lines.join(nl);
+  }
+  let at = 0;
+  if (lines[0] === '---') { const e = lines.indexOf('---', 1); if (e > 0) at = e + 1; }
+  while (at < lines.length && lines[at].trim() === '' && at > 0) at++;
+  if (at < lines.length && /^#\s/.test(lines[at])) { at++; }
+  const rest = lines.slice(at);
+  while (rest.length && rest[0].trim() === '') rest.shift();
+  const before = lines.slice(0, at);
+  const out = before.concat(before.length && before[before.length - 1].trim() !== '' && /^#\s/.test(before[before.length - 1]) ? [''] : [], ['## ' + head], add, rest.length ? [''] : [], rest);
+  return out.join(nl) + (rest.length ? '' : nl);
 }
