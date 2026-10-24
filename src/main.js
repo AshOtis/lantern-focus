@@ -184,7 +184,7 @@ class LanternView extends ItemView {
 LanternView.prototype.paintNow = function () {
   const p = this.plugin, src = this.npSrc = p.nowSource();
   this.np.toggleClass('is-empty', !src);
-  this.npEmpty.setText(src ? '' : p.anyPlayer() ? 'Nothing playing. Press play in Static FM, Hi-Fi Tuner, Aurora MP3, MFP Player or Spotify and it shows here.' : 'Install one of my players (Static FM, Hi-Fi Tuner, Aurora MP3 or MFP Player), or turn on "What\'s playing on your computer" in settings for Spotify.');
+  this.npEmpty.setText(src ? '' : p.anyPlayer() ? 'Nothing playing. Press play in Static FM, Hi-Fi Tuner, Aurora MP3, MFP Player or Spotify and it shows here.' : 'Install one of my players (Static FM, Hi-Fi Tuner, Aurora MP3 or MFP Player), or for Spotify, turn on "What\'s playing on your computer" in Aurora MP3.');
   this.npEmpty.toggleClass('is-hidden', !!src);
   for (const el of [this.npArt.parentElement, this.npPlay.parentElement]) el.toggleClass('is-hidden', !src);
   if (!src) return;
@@ -222,7 +222,6 @@ class LanternFocus extends Plugin {
     this.views = new Set();
     this.chime = new LFChime();
     this.recent = [];   // player ids, most recently started first
-    this.sysNow = new AMSystemNow(st => { if (st && st.playing) this.touch('computer'); this.refresh(); });
     this.lastDone = null;
 
     this.registerView(LF_VIEW, leaf => new LanternView(leaf, this));
@@ -245,7 +244,6 @@ class LanternFocus extends Plugin {
     // remember which player you started last, so Now playing shows that one
     this.registerEvent(this.app.workspace.on('ashotis:playing', src => { this.touch(src === 'aurora-mp3' ? (this.ampExt() ? 'computer' : 'aurora-music') : src); this.refresh(); }));
     this.registerEvent(this.app.workspace.on('ashotis:stopped', () => this.refresh()));
-    this.app.workspace.onLayoutReady(() => { if (this.d.systemNow && !this.ampHandlesComputer()) this.sysNow.start(); });
 
     this.registerInterval(window.setInterval(() => this.tick(), 1000));
     // keep the "use this note" suggestion up to date as you move between notes
@@ -253,23 +251,18 @@ class LanternFocus extends Plugin {
     this.app.workspace.onLayoutReady(() => { this.resume(); this.tick(); });
   }
 
-  onunload() { this.chime.destroy(); this.sysNow.stop(); document.body.removeClass('lantern-calm', 'lantern-calm-sides', 'lantern-focus-on'); }
+  onunload() { this.chime.destroy(); document.body.removeClass('lantern-calm', 'lantern-calm-sides', 'lantern-focus-on'); }
 
   /* ---------- now playing ---------- */
   touch(id) { this.recent = [id].concat(this.recent.filter(x => x !== id)).slice(0, 8); }
   plugins() { return (this.app.plugins && this.app.plugins.plugins) || {}; }
-  anyPlayer() { const P = this.plugins(); return !!(P['static-fm'] || P['hifi-tuner'] || P['aurora-music'] || P['mfp-player'] || this.sysNow.state); }
+  anyPlayer() { const P = this.plugins(); return !!(P['static-fm'] || P['hifi-tuner'] || P['aurora-music'] || P['mfp-player']); }
   ampHandlesComputer() { const a = this.plugins()['aurora-music']; return !!(a && a.d && a.d.systemNow && a.sysNow); }
   ampExt() { const a = this.plugins()['aurora-music']; return !!(a && a.extShown && a.extShown()); }
   nowSource() {
     const list = lfSources(this);
     for (const s of list) if (s.playing && !this.recent.includes(s.id)) this.recent.push(s.id);
     return lfPickSource(list, this.recent);
-  }
-  setSystemNow(on) {
-    this.d.systemNow = on; this.save();
-    if (on && !this.ampHandlesComputer()) this.sysNow.start(); else this.sysNow.stop();
-    this.refresh();
   }
   // with "music follows the session": pause your music for breaks, play it again when you get back to work
   musicTo(play) {
@@ -524,13 +517,9 @@ class LanternSettings extends PluginSettingTab {
       .addToggle(t => t.setValue(d.musicFollows).onChange(v => { d.musicFollows = v; p.save(); this.display(); }));
     if (d.musicFollows) new Setting(el).setName('Pause music for breaks').setDesc('Turn off to keep the music playing when the focus timer ends.')
       .addToggle(t => t.setValue(d.breakPause !== false).onChange(v => { d.breakPause = v; p.save(); }));
-    const ampDoes = p.ampHandlesComputer();
-    new Setting(el).setName("What's playing on your computer").setDesc(ampDoes
-      ? 'Aurora MP3 is already reading this for you, so Spotify shows in Now playing.'
-      : AMSystemNow.supported()
-        ? 'Show Spotify, browsers, Apple Music, VLC and other apps in Now playing, with play, pause and skip. Read from Windows; no account needed. It runs a small hidden Windows PowerShell process while this is on.'
-        : 'Windows only for now.')
-      .addToggle(t => t.setValue(!!d.systemNow).setDisabled(ampDoes || !AMSystemNow.supported()).onChange(v => p.setSystemNow(v)));
+    new Setting(el).setName("Spotify and other apps").setDesc(p.ampHandlesComputer()
+      ? 'Aurora MP3 is reading what’s playing on your computer, so Spotify shows in Now playing.'
+      : 'To see Spotify (and other apps on your computer) in Now playing, turn on "What’s playing on your computer" in Aurora MP3’s settings. Lantern shows what Aurora MP3 reads.');
   }
 }
 

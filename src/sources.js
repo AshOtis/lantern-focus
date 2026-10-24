@@ -1,5 +1,5 @@
 /* Lantern Focus: Now playing. Shows what's playing in my other players (Static FM, Hi-Fi Tuner, Aurora MP3,
- * MFP Player) and on the computer (Spotify and others, Windows), with simple controls. Lantern plays no sound
+ * MFP Player) and, through Aurora MP3, on the computer (Spotify and others), with simple controls. Lantern plays no sound
  * of its own: it reads the players that are installed and asks them to play, pause or skip. */
 
 // Each source returns { id, app, playing, title, sub, art, icon, controls: { toggle, next, prev, open } } or null.
@@ -53,12 +53,6 @@ function lfSources(plugin) {
       controls: { toggle: () => mfp.togglePlay(), next: () => mfp.step(1), prev: () => mfp.prev ? mfp.prev() : mfp.step(-1), open: openCmd('mfp-player') } });
   });
 
-  // Spotify and other apps, read by Lantern itself when Aurora MP3 isn't doing it
-  if (!out.some(o => o.id === 'computer') && plugin.sysNow && plugin.sysNow.state) {
-    const x = plugin.sysNow.state;
-    out.push({ id: 'computer', app: x.appName, playing: x.playing, title: x.title, sub: [x.artist, x.album].filter(Boolean).join(' · '), art: x.art || '', icon: 'music',
-      controls: { toggle: () => plugin.sysNow.control('toggle'), next: () => plugin.sysNow.control('next'), prev: () => plugin.sysNow.control('prev') } });
-  }
   return out;
 }
 

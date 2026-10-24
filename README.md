@@ -15,7 +15,7 @@ Focus sessions for wandering minds. One note, one block of time, and a calm scre
 ## Features
 
 - **Focus sessions:** a ring timer that glows warm while you focus and cool on a break. Pause, add five minutes, or stop early (the minutes you did still count). After every few rounds you get a longer break. The next round waits until you press play, so a break never runs straight into work.
-- **Now playing:** shows what's playing in my other players, [Static FM](https://github.com/AshOtis/static-fm), [Hi-Fi Tuner](https://github.com/AshOtis/hifi-tuner), [Aurora MP3](https://github.com/AshOtis/aurora-mp3) and [MFP Player](https://github.com/AshOtis/mf-player), and on Windows what's playing on your computer, such as Spotify. You get the cover, the track, and play/pause, previous and next. Lantern plays no sound of its own except its chimes. With **Music follows the session**, your music starts with a focus session and pauses for the break, or turn off **Pause music for breaks** to keep it playing.
+- **Now playing:** shows what's playing in my other players, [Static FM](https://github.com/AshOtis/static-fm), [Hi-Fi Tuner](https://github.com/AshOtis/hifi-tuner), [Aurora MP3](https://github.com/AshOtis/aurora-mp3) and [MFP Player](https://github.com/AshOtis/mf-player), and, through Aurora MP3's **What's playing on your computer** (Windows), apps such as Spotify. You get the cover, the track, and play/pause, previous and next. Lantern plays no sound of its own except its chimes. With **Music follows the session**, your music starts with a focus session and pauses for the break, or turn off **Pause music for breaks** to keep it playing.
 - **Park a thought:** type it in the panel, or run **Lantern Focus: Park a thought** from anywhere (give it a hotkey in **Settings → Hotkeys**). Parked thoughts are saved as tasks in one list under **Parked thoughts** at the top of your daily note (change the heading in settings), out of your head and out of the way.
 - **Calm screen:** while you focus, the ribbon, tabs, headers, status bar and file list fade back, and themes with glowing or picture backgrounds quieten down. Only your note stands out. Hover over anything to bring it back. Everything returns on your break.
 - **Daily note log:** each session adds a line such as `09:00–09:50 Focused 50 min on Chapter three`. You can turn this off.
@@ -38,7 +38,7 @@ None of this is treatment. It's a set of small helpers that you can switch off.
 
 ## Privacy
 
-Lantern Focus makes no network requests and collects nothing. If you turn on **What's playing on your computer** (Windows), it runs a small hidden Windows PowerShell process that asks Windows' media controls what is playing; that information stays on your computer. The script is in [`src/nowplaying.js`](src/nowplaying.js). It writes only to today's daily note (when logging is on) and to its own `data.json`.
+Lantern Focus makes no network requests, runs no programs and collects nothing. It writes only to today's daily note (when logging is on) and to its own `data.json`.
 
 ## Building from source
 
