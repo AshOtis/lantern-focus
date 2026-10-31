@@ -4,8 +4,11 @@
 
 const LF_VIEW = 'lantern-focus-view';
 const LF_PLANS = { 25: 5, 50: 10, 90: 15 };   // focus minutes -> break minutes
+const LF_DOT_EVERY = [8, 16, 24, 32, 44];      // minutes between dots during a Dot session
+const LF_DOT_SECONDS = [5, 10, 15, 20, 30];    // how long each dot stays
+const lfBreakFor = m => LF_PLANS[m] || (m <= 30 ? 5 : m <= 60 ? 10 : 15);
 const LF_DEFAULTS = {
-  minutes: 25, chimes: true, calm: true, calmSidebars: true,
+  minutes: 25, dot: false, dotEvery: 16, dotSeconds: 10, chimes: true, calm: true, calmSidebars: true,
   logToDaily: true, autoBreak: true, longBreakEvery: 4, longBreak: 20,
   parkNow: false, theme: 'amber', musicFollows: true, breakPause: true, systemNow: false, blend: true,
   task: '', session: null,          // a running session survives a restart: { phase, task, endsAt, pausedLeft, startedAt, focusMin, breakMin, round, thoughts[] }
@@ -56,6 +59,11 @@ class LanternView extends ItemView {
     // length
     this.lenRow = root.createDiv({ cls: 'lf-chips' });
     this.lenBtns = {};
+    // Dot is a mode, not a length: it sits beside 25, 50 and 90 and works with any of them
+    this.dotBtn = this.lenRow.createEl('button', { cls: 'lf-chip', text: 'Dot' });
+    this.dotBtn.setAttr('aria-label', 'Dot mode: every so often the screen goes blank with a single dot');
+    this.dotBtn.title = 'Dot mode: every so often the screen goes blank with a single dot (timing is in settings)';
+    this.dotBtn.addEventListener('click', () => { this.plugin.d.dot = !this.plugin.d.dot; this.plugin.save(); this.paint(); });
     for (const m of Object.keys(LF_PLANS).map(Number)) {
       const b = this.lenRow.createEl('button', { cls: 'lf-chip', text: `${m} min` });
       b.setAttr('aria-label', `${m} minutes of focus, ${LF_PLANS[m]} minute break`);
@@ -115,13 +123,13 @@ class LanternView extends ItemView {
     if (d.theme && d.theme !== 'amber') this.root.dataset.theme = d.theme; else delete this.root.dataset.theme;
     this.root.toggleClass('is-paused', !!(s && s.pausedLeft != null));
 
-    const left = s ? (s.pausedLeft != null ? s.pausedLeft : Math.max(0, s.endsAt - now)) : d.minutes * 60000;
-    const total = s ? (s.phase === 'break' ? s.breakMin : s.focusMin) * 60000 : d.minutes * 60000;
+    const left = s ? (s.pausedLeft != null ? s.pausedLeft : Math.max(0, s.endsAt - now)) : p.planMin() * 60000;
+    const total = s ? (s.phase === 'break' ? s.breakMin : s.focusMin) * 60000 : p.planMin() * 60000;
     const mm = Math.floor(left / 60000), ss = Math.floor(left / 1000) % 60;
     this.timeEl.setText(`${mm}:${String(ss).padStart(2, '0')}`);
     const waiting = !!(s && s.phase === 'focus' && s.pausedLeft != null && s.pausedLeft >= s.focusMin * 60000);
     this.phaseEl.setText(phase === 'focus' ? (waiting ? 'Ready' : s.pausedLeft != null ? 'Paused' : 'Focus') : phase === 'break' ? 'Break' : 'Ready');
-    this.roundEl.setText(s ? `Round ${s.round}` : `${d.minutes} min · ${LF_PLANS[d.minutes] || 5} min break`);
+    this.roundEl.setText(s ? `Round ${s.round}` : `${d.dot ? 'Dot · ' : ''}${p.planMin()} min · ${lfBreakFor(p.planMin())} min break`);
     const C = 2 * Math.PI * 88;
     this.arc.style.strokeDashoffset = String(C * (1 - (s ? left / total : 1)));
 
@@ -138,6 +146,7 @@ class LanternView extends ItemView {
     this.taskShown.toggleClass('is-next', !s);
     this.lenRow.toggleClass('is-hidden', !!s);
     for (const m in this.lenBtns) this.lenBtns[m].toggleClass('is-on', Number(m) === d.minutes);
+    this.dotBtn.toggleClass('is-on', !!d.dot);
 
     this.bMain.empty();
     setIcon(this.bMain, !s || s.pausedLeft != null ? 'play' : 'pause');
@@ -217,7 +226,11 @@ class ParkModal extends Modal {
 class LanternFocus extends Plugin {
   async onload() {
     this.d = Object.assign({}, LF_DEFAULTS, await this.loadData());
+    if (this.d.minutes === 'dot') { this.d.minutes = 90; this.d.dot = true; }   // from the short-lived Dot length
     if (!LF_PLANS[this.d.minutes]) this.d.minutes = 25;
+    delete this.d.dotMinutes;
+    if (!LF_DOT_SECONDS.includes(this.d.dotSeconds)) this.d.dotSeconds = 10;
+    if (!LF_DOT_EVERY.includes(this.d.dotEvery)) this.d.dotEvery = 16;
     if (this.d.session) this.d.session.thoughts = (this.d.session.thoughts || []).map(t => typeof t === 'string' ? { text: t, saved: false } : t);
     this.views = new Set();
     this.chime = new LFChime();
@@ -237,6 +250,7 @@ class LanternFocus extends Plugin {
       ['more', 'Five more minutes', () => this.addMinutes(5)],
       ['calm', 'Calm screen on or off', () => { this.d.calm = !this.d.calm; this.save(); this.applyCalm(); new Notice(`Lantern Focus: calm screen ${this.d.calm ? 'on' : 'off'}`); }]
     ];
+    cmds.push(['dot', 'Show the dot screen', () => (this.dotEl && !this.dotEl.hasClass('is-out')) ? this.fadeDot() : this.showDot()]);
     for (const [id, name, callback] of cmds) this.addCommand({ id, name, callback });
     this.addCommand({ id: 'park', name: 'Park a thought', callback: () => new ParkModal(this.app, this).open() });
     this.addSettingTab(new LanternSettings(this.app, this));
@@ -245,13 +259,15 @@ class LanternFocus extends Plugin {
     this.registerEvent(this.app.workspace.on('ashotis:playing', src => { this.touch(src === 'aurora-mp3' ? (this.ampExt() ? 'computer' : 'aurora-music') : src); this.refresh(); }));
     this.registerEvent(this.app.workspace.on('ashotis:stopped', () => this.refresh()));
 
+    // Escape lets the dot go early
+    this.registerDomEvent(document, 'keydown', e => { if (e.key === 'Escape' && this.dotEl) this.fadeDot(); });
     this.registerInterval(window.setInterval(() => this.tick(), 1000));
     // keep the "use this note" suggestion up to date as you move between notes
     this.registerEvent(this.app.workspace.on('file-open', () => { this.lastNote = this.app.workspace.getActiveFile() || this.lastNote; this.refresh(); }));
     this.app.workspace.onLayoutReady(() => { this.resume(); this.tick(); });
   }
 
-  onunload() { this.chime.destroy(); document.body.removeClass('lantern-calm', 'lantern-calm-sides', 'lantern-focus-on'); }
+  onunload() { this.chime.destroy(); this.hideDot(); document.body.removeClass('lantern-calm', 'lantern-calm-sides', 'lantern-focus-on'); }
 
   /* ---------- now playing ---------- */
   touch(id) { this.recent = [id].concat(this.recent.filter(x => x !== id)).slice(0, 8); }
@@ -282,12 +298,14 @@ class LanternFocus extends Plugin {
     if (s.pausedLeft != null) this.resumePause(); else this.pause();
   }
 
+  planMin() { return this.d.minutes; }
+
   start() {
-    const focusMin = this.d.minutes, breakMin = LF_PLANS[focusMin] || 5;
+    const dot = !!this.d.dot, focusMin = this.planMin(), breakMin = lfBreakFor(focusMin);
     let task = '', notePath = null;
     if (!task) { const f = this.currentNote(); if (f) { task = f.basename; notePath = f.path; } }
     this.d.session = { phase: 'focus', task, notePath, startedAt: Date.now(), endsAt: Date.now() + focusMin * 60000,
-      pausedLeft: null, focusMin, breakMin, round: 1, thoughts: [] };
+      pausedLeft: null, focusMin, breakMin, round: 1, thoughts: [], dot, nextDot: dot ? Date.now() + this.d.dotEvery * 60000 : 0 };
     this.lastDone = null;
     this.save();
     if (this.d.chimes) this.chime.play('start');
@@ -304,7 +322,8 @@ class LanternFocus extends Plugin {
   resumePause() {
     const s = this.d.session; if (!s || s.pausedLeft == null) return;
     const fresh = s.phase === 'focus' && s.pausedLeft >= s.focusMin * 60000;
-    if (fresh) { s.startedAt = Date.now(); if (this.d.chimes) this.chime.play('start'); this.musicTo(true); }
+    if (fresh) { s.startedAt = Date.now(); if (this.d.chimes) this.chime.play('start'); this.musicTo(true);}
+    if (s.dot) s.nextDot = Date.now() + this.d.dotEvery * 60000;
     s.endsAt = Date.now() + s.pausedLeft; s.pausedLeft = null;
     this.save(); this.applyCalm(); this.refresh();
   }
@@ -319,18 +338,25 @@ class LanternFocus extends Plugin {
   // Stop early: log what was done (if anything), then reset
   stop() {
     const s = this.d.session; if (!s) return;
+    this.fadeDot();
     if (s.phase === 'focus') this.finishFocus(true); else this.endSession();
   }
 
   // after a restart, a session that ran out while Obsidian was closed is wrapped up
   resume() {
     const s = this.d.session; if (!s) return;
+    if (s.dot) s.nextDot = Date.now() + this.d.dotEvery * 60000;
     if (s.pausedLeft == null && Date.now() > s.endsAt) { if (s.phase === 'focus') this.finishFocus(false, true); else this.endSession(); return; }
     this.applyCalm();
   }
 
   tick() {
     const s = this.d.session;
+    // Dot session: every so often, a blank screen with one dot, then back to the work
+    if (s && s.dot && s.phase === 'focus' && s.pausedLeft == null && s.nextDot && Date.now() >= s.nextDot) {
+      s.nextDot = Date.now() + this.d.dotEvery * 60000;
+      if (s.endsAt - Date.now() > 30000) this.showDot();
+    }
     if (s && s.pausedLeft == null && Date.now() >= s.endsAt) {
       if (s.phase === 'focus') this.finishFocus(false); else this.endBreak();
     }
@@ -403,6 +429,36 @@ class LanternFocus extends Plugin {
   minutesToday() {
     const day = window.moment().format('YYYY-MM-DD');
     return this.d.history.filter(h => h.day === day).reduce((a, h) => a + h.minutes, 0);
+  }
+
+  /* ---------- the dot: a blank screen with one dot, which fades away and leaves you the work ---------- */
+  showDot() {
+    this.hideDot();
+    const el = this.dotEl = document.body.createDiv({ cls: 'lf-dot-screen' });
+    el.setAttr('aria-hidden', 'true');
+    const dot = el.createDiv({ cls: 'lf-dot-dot' });
+    // the theme's own background, forced fully solid so nothing of Obsidian shows through
+    el.style.setProperty('background-color', 'var(--background-primary)', 'important');
+    let m = (getComputedStyle(el).backgroundColor.match(/[\d.]+/g) || []).map(Number);
+    if (m.length < 3 || (m.length > 3 && m[3] === 0)) m = document.body.hasClass('theme-dark') ? [30, 30, 30] : [255, 255, 255];
+    el.style.setProperty('background-color', `rgb(${m[0]}, ${m[1]}, ${m[2]})`, 'important');
+    el.style.setProperty('background-image', 'none', 'important');
+    el.style.setProperty('backdrop-filter', 'none', 'important');
+    const lum = 0.299 * m[0] + 0.587 * m[1] + 0.114 * m[2];
+    dot.style.setProperty('background-color', 'var(--text-muted)', 'important');   // the theme's own softer text colour: light on a dark theme, dark on a light theme
+    el.addEventListener('click', () => this.fadeDot());
+    
+    this.dotTimer = window.setTimeout(() => this.fadeDot(), (this.d.dotSeconds || 10) * 1000);
+  }
+  fadeDot() {
+    const el = this.dotEl; if (!el || el.hasClass('is-out')) return;
+    clearTimeout(this.dotTimer);
+    el.addClass('is-out');
+    this.dotGone = window.setTimeout(() => { if (this.dotEl === el) this.hideDot(); }, 3200);
+  }
+  hideDot() {
+    clearTimeout(this.dotTimer); clearTimeout(this.dotGone);
+    if (this.dotEl) { this.dotEl.remove(); this.dotEl = null; }
   }
 
   /* ---------- calm screen: during focus, everything but your note fades back ---------- */
@@ -512,6 +568,11 @@ class LanternSettings extends PluginSettingTab {
       .addToggle(t => t.setValue(!!d.parkNow).onChange(v => { d.parkNow = v; p.save(); p.refresh(); }));
     new Setting(el).setName('Thoughts heading').setDesc('Parked thoughts always go in one list under this heading at the top of today\'s daily note.')
       .addText(t => t.setPlaceholder('Parked thoughts').setValue(d.thoughtsHeading || '').onChange(v => { d.thoughtsHeading = v.trim(); p.save(); }));
+    new Setting(el).setName('Dot').setDesc('Choose Dot beside the 25, 50 and 90 minute buttons to turn it on for your next session. It works with any length.').setHeading();
+    new Setting(el).setName('Dot appears every').setDesc('During a Dot session, Obsidian goes blank with a single dot in the middle this often, then fades back to your work.')
+      .addDropdown(dd => { for (const m of LF_DOT_EVERY) dd.addOption(String(m), `${m} minutes`); dd.setValue(String(d.dotEvery)).onChange(v => { d.dotEvery = Number(v); p.save(); }); });
+    new Setting(el).setName('Dot stays for').setDesc('How long each dot holds before it fades away. Click or press Escape to let it go sooner.')
+      .addDropdown(dd => { for (const m of LF_DOT_SECONDS) dd.addOption(String(m), `${m} seconds`); dd.setValue(String(d.dotSeconds)).onChange(v => { d.dotSeconds = Number(v); p.save(); }); });
     new Setting(el).setName('Now playing').setHeading();
     new Setting(el).setName('Music follows the session').setDesc('When a focus session starts, press play on the player shown in Now playing.')
       .addToggle(t => t.setValue(d.musicFollows).onChange(v => { d.musicFollows = v; p.save(); this.display(); }));

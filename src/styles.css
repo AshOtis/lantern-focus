@@ -117,7 +117,8 @@ body.lantern-calm .workspace-tab-header-container,
 body.lantern-calm .view-header,
 body.lantern-calm .status-bar,
 body.lantern-calm .titlebar,
-body.lantern-calm.lantern-calm-sides .mod-left-split {
+body.lantern-calm.lantern-calm-sides .mod-left-split,
+body.lantern-calm.lantern-calm-sides .mod-right-split {
   opacity: .12; transition: opacity .8s ease;
 }
 body.lantern-calm .workspace-ribbon:hover,
@@ -125,10 +126,14 @@ body.lantern-calm .workspace-tab-header-container:hover,
 body.lantern-calm .view-header:hover,
 body.lantern-calm .status-bar:hover,
 body.lantern-calm .titlebar:hover,
-body.lantern-calm.lantern-calm-sides .mod-left-split:hover { opacity: 1; transition: opacity .25s ease; }
+body.lantern-calm.lantern-calm-sides .mod-left-split:hover,
+body.lantern-calm.lantern-calm-sides .mod-right-split:hover { opacity: 1; transition: opacity .25s ease; }
+/* the sidebar Lantern lives in dims too, but stays readable for the playback controls */
+body.lantern-calm .mod-left-split:has(.lf), body.lantern-calm .mod-right-split:has(.lf) { opacity: .45; transition: opacity .8s ease; }
+body.lantern-calm .mod-left-split:has(.lf):hover, body.lantern-calm .mod-right-split:has(.lf):hover { opacity: 1; transition: opacity .25s ease; }
 /* themes that paint glows or pictures behind the app (Static Aurora, Konban, Tokyo Rain, Field Kit) quieten down */
 body.lantern-calm::before, body.lantern-calm::after { opacity: .12 !important; transition: opacity 1.2s ease; }
-.workspace-ribbon, .workspace-tab-header-container, .view-header, .status-bar, .mod-left-split { transition: opacity .8s ease; }
+.workspace-ribbon, .workspace-tab-header-container, .view-header, .status-bar, .mod-left-split, .mod-right-split { transition: opacity .8s ease; }
 @media (prefers-reduced-motion: reduce) { .lf[data-phase="focus"] .lf-glow { animation: none; } }
 
 /* ---------- colour ways ---------- */
@@ -198,3 +203,8 @@ body.lantern-calm::before, body.lantern-calm::after { opacity: .12 !important; t
 /* before a session: the note it will be about */
 .lf-task-shown.is-next { opacity: .7; font-size: .95em; }
 .lf-task-shown.is-next::before { content: 'Focusing on: '; opacity: .7; }
+
+/* Dot mode: a flat colour over all of Obsidian with one dot, which then fades away */
+.lf-dot-screen { position: fixed !important; top: 0 !important; left: 0 !important; right: 0; bottom: 0; width: 100vw !important; height: 100vh !important; margin: 0; padding: 0; box-sizing: border-box; z-index: 2147483647; display: flex; align-items: center; justify-content: center; background: #000; opacity: 1 !important; transition: opacity 3s ease; }
+.lf-dot-screen.is-out { opacity: 0 !important; pointer-events: none; }
+.lf-dot-dot { width: 16px; height: 16px; border-radius: 50%; }
